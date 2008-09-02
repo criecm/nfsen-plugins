@@ -1,0 +1,96 @@
+INSTALLATION:
+
+This plugins needs the nfsen-events plugin to be installed. The files in the bin directory contain executable files and should be placed in a apropriate location (for example /usr/local/bin). The files in the backend directory should be place in the nfsen backend plugin directory ($BACKEND_PLUGINDIR in nfsen.conf). 
+
+
+CONFIGURATION:
+
+You need a list of botnet-c&c's to be able to use the plugin. A public one can be found at:
+
+http://www.emergingthreats.net/rules/emerging-botcc.rules
+
+To use the list with the botnet plugin, it needs to be converted to a format usable by the plugin. The plugin expects a pipe delimited list that contains a ip-adress, port-number and a protocol number (in that order). If your origional list doesn't contain port or protocol information you can leave these fields blank. In the nfsen configuration you can define which fields should be included during processing of the list. An example conversion script for the emergingthreads.net script mentioned before is included as "emerginghtreads_example/get_botnets_emergingthreads-botcc".
+
+You can use a crontab entry to download the list. After downloading the list it should be converted to a filter, which is used to increase the performance of the plugin by doing a preselection of relevant flows. The location of the filter depends on your nfsen configuration and the name you choose for the alert. The location is: 
+
+<$PROFILESTATDIR>/~<NAME OF THE ALERT>/<NAME OF THE ALERT>-filter.txt
+
+An example of a crontab script that does these tasks is included in the example directory. It accepts 2 parameters. The script downloads the file, converts and stores it on the location defined by the first parameter. Next, it converts the file to a nfsen-filter which location is defined by the second parameter:
+
+0  23  * * *    /usr/local/bin/botnet.cron <LIST_LOCATION> <$PROFILESTATDIR>/~<ALERT_NAME>/<ALERT_NAME>-filter.txt
+
+<LIST_LOCATION>        is the location where the script should put the list
+<$PROFILESTATDIR>      is the value of $PROFILESTATDIR in your nfsen.conf
+<ALERT_NAME>           is the name you have choosen for the alert
+
+To load the plugin, you should add this line to the @plugins section of nfsen.conf:
+	[ "!",     'Botnets' ],
+
+To configure the plugin, you should add a section named "botnets" to the %PluginConf variable in nfsen.conf. This section should include a "import_cmd" variable that contains the command that needs to be executed in order to generate the pipe delimited list. If the "match_port" and "match_proto" fields are set to 0, these fields are not included during processing of the botnet list. This is what you should add to your %PluginConf section if you use the emergingthreads.net example scripts:
+
+%PluginConf = (
+	...
+	botnets => {
+		import_cmd              => "cat <LIST_LOCATION>",
+		match_port              => 0,
+		match_proto             => 0,
+	},
+	...
+)
+
+And reload nfsen by issuing "nfsen reload". Then you need to add an alert to nfsen using the web interface with the name you choose before (<ALERT_NAME>), with "Condition based on plugin "Botnets" selected. The content of the filter can be set to anything valid ("not any" is probably your best choise), as it will be overwritten by the crontab script.
+
+
+
+HANDLING FALSE POSITIVES:
+
+Most botnet-c&c's use commonly used protocols, and it might not be safe to assume that botnet controllers are dedicated to this task alone. You should not assume that all connections to this host are botnet connections, as the node hosting the controller might also be hosting legitimate content (it might be a compromised host). To help handle this problem, the plugin can take port and protocol information into consideration (which of course requires you to have access to a list that includes this information). 
+
+Furthermore, this plugin doesn't directly report every connection, but in stead reports to the nfsen-events plugin. The events plugin can be used to collect more information about the traffic pattern between the possible bot and the controller. For example, most connections to legitimate servers are expected to be limited in duration, so we can reduce the posibility of false positives by reporting only those hosts that regularly connect during a reasonable timespan. This can be illustrated by the nfsen-events configuration we currently use in production:
+
+periodic_queries => [
+	{ # Botnet events are timed out 8 hour after the last update
+		"Type"=>"[eq]botnet",
+		"UpdateTime"=>['[le]#$unix_time-28800#','#$unix_time#'],
+		"StopTime"=>["[null]",'#$unix_time#'],
+	},
+	{ # Botnet events are upgraded if the bot contacted the controller more than 20 times
+		"Type"=>"[eq]botnet",
+		"Times"=>"[ge]20",
+		"UpdateTime"=>'#$unix_time#',
+		"Level"=>["[eq]notify","alarm"],
+	},
+	....
+	]
+
+The first section says that we time out a suspected bot if we don't hear about it for 8 hours. The second section upgrades suspected bot events to "alarm" level when we observe 20 or more connections before it has been timed out. Note that our production system uses a 1:100 sampling rate, so this effectively means that we expect hosts to be bots when they connect approximately 2000 times ore more to a botnet-c&c within a time period of 8 hours. You can use the nfsen-events-mail plugin to send out an email for every bot-event that has been upgraded to "alarm" level:
+
+mails => [
+	{       
+		query => { # send a mail for suspected bots
+			"Type"=>"[eq]botnet",
+			"Level"=>"[eq]alarm",
+			"Notified"=>"[null]",
+		},
+		to => ['person1@domain1.com','person2@domain2.com'],
+		subject => '[Nfsen: botnet] source host: $event{Source} destination host: $event{Destination}',
+		template => "botnet_iodef.tp",
+		action => { # Make sure not to report it again before it times out
+			"Type"=>"[eq]botnet",
+			"Level"=>"[eq]alarm",
+			"Notified"=>["[null]",'[set]#$unix_time#'],
+			"UpdateTime"=>'[set]#$unix_time#',
+		},
+	},
+]
+
+
+EARLIER VERSIONS:
+
+The botnet plugin has been posted on the nfsen-discuss mailinglist and I have sent it to some people on request. The differences between these versions and the initial version posted on the nfsen-plugins sourceforge project are slight, but possibly might pose some problems.
+
+The earlier versions refered to the botnet-c&c list provided by www.bleedingthreads.net as an example public botnet-c&c list. This list has not been updated since november 15 2007. However, this list is being continued on www.emergingthreads.net, so to continue using the plugin, you should make sure that you reference to the emergingthreads list in stead of the bleedingthreads one.
+
+In the earlier versions of the plugin, the example "get_botnets_bleeding-botcc" script could export a nfsen-filter by using the "-f" parameter. This functionality has been moved to the "botnet-filter" script in order to simplify the process of creating a custom "get_botnets" script.
+
+The scripts in the "emergingthreads_example" directory reflect all these changes.

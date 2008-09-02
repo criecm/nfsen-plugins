@@ -1,0 +1,10 @@
+#!/usr/bin/perl
+
+foreach my $line (<STDIN>) {
+	next if ($line =~ /^\s*\#.*$/ || $line =~ /^\s*$/); # skip empty and comment lines
+
+	my ($ip_list) = $line=~m/alert ip \$HOME_NET any \-\> \[([^\]]+)\]/;
+	foreach my $ip (split(/,/,$ip_list)) {
+		print join('|',$ip, "", "")."\n";
+	}
+}

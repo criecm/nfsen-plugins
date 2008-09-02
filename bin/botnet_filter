@@ -1,0 +1,12 @@
+#!/usr/bin/perl
+
+print "ip in [";
+my $first = 1;
+foreach my $line (<STDIN>) {
+	next if ($line =~ /^\s*\#.*$/ || $line =~ /^\s*$/); # skip empty and comment lines
+
+	my ($ip, $a, $b) = split(/\|/, $line);
+	print $ip." ";
+}
+print "]";
+
