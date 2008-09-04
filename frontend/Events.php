@@ -28,6 +28,14 @@
  *	ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH 
  *	DAMAGE.
  *
+ *
+ *  $Author:$
+ *
+ *  $Id:$
+ *
+ *  $LastChangedRevision:$
+ *
+ *
  */
 
 #$ip_lookup=1;
