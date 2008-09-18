@@ -1,6 +1,6 @@
 INSTALLATION:
 
-This plugins needs the nfsen-events plugin to be installed. The files in the bin directory contain executable files and should be placed in a apropriate location (for example /usr/local/bin). The files in the backend directory should be place in the nfsen backend plugin directory ($BACKEND_PLUGINDIR in nfsen.conf). 
+This plugins needs the nfsen-events plugin to be installed. The files in the bin directory contain executable files and should be placed in a apropriate location (for example /usr/local/bin). The files in the backend directory should be place in the nfsen backend plugin directory ($BACKEND_PLUGINDIR in nfsen.conf). The files in the mail-templates directory are to be used in combination with the events-mail plugin, and should be places in the templates directory configured in the event-mail configuration.
 
 
 CONFIGURATION:
@@ -9,7 +9,16 @@ You need a list of botnet-c&c's to be able to use the plugin. A public one can b
 
 http://www.emergingthreats.net/rules/emerging-botcc.rules
 
-To use the list with the botnet plugin, it needs to be converted to a format usable by the plugin. The plugin expects a pipe delimited list that contains a ip-adress, port-number and a protocol number (in that order). If your origional list doesn't contain port or protocol information you can leave these fields blank. In the nfsen configuration you can define which fields should be included during processing of the list. An example conversion script for the emergingthreads.net script mentioned before is included as "emerginghtreads_example/get_botnets_emergingthreads-botcc".
+To use the list with the botnet plugin, it needs to be converted to a format usable by the plugin. The plugin expects a pipe delimited list that contains a (in that order):
+- ip-adress
+- port-number 
+- and a protocol number
+- name of the source of the list
+- timestamp of the list
+- time-out of the botnet-c&c (when does it become invallid)
+- botnet identification
+
+If your origional list doesn't contain port, protocol or botnet identification information you can leave these fields blank so they will be ignored. An example conversion script for the emergingthreads.net script mentioned before is included as "emerginghtreads_example/get_botnets_emergingthreads-botcc". The time-out value of the emergingthreads botnet controllers is set to 1 day after the timestamp of the list, so it is important to update the list at least daily.
 
 You can use a crontab entry to download the list. After downloading the list it should be converted to a filter, which is used to increase the performance of the plugin by doing a preselection of relevant flows. The location of the filter depends on your nfsen configuration and the name you choose for the alert. The location is: 
 
@@ -17,9 +26,10 @@ You can use a crontab entry to download the list. After downloading the list it 
 
 An example of a crontab script that does these tasks is included in the example directory. It accepts 2 parameters. The script downloads the file, converts and stores it on the location defined by the first parameter. Next, it converts the file to a nfsen-filter which location is defined by the second parameter:
 
-0  23  * * *    /usr/local/bin/botnet.cron <LIST_LOCATION> <$PROFILESTATDIR>/~<ALERT_NAME>/<ALERT_NAME>-filter.txt
+0  * * * *    /usr/local/bin/botnet.cron <RAW_LIST_LOCATION> <LIST_LOCATION> <$PROFILESTATDIR>/~<ALERT_NAME>/<ALERT_NAME>-filter.txt
 
-<LIST_LOCATION>        is the location where the script should put the list
+<RAW_LIST_LOCATION>    is the location where the script should put the original list
+<LIST_LOCATION>        is the location where the script should put the converted list
 <$PROFILESTATDIR>      is the value of $PROFILESTATDIR in your nfsen.conf
 <ALERT_NAME>           is the name you have choosen for the alert
 
@@ -32,8 +42,6 @@ To configure the plugin, you should add a section named "botnets" to the %Plugin
 	...
 	botnets => {
 		import_cmd              => "cat <LIST_LOCATION>",
-		match_port              => 0,
-		match_proto             => 0,
 	},
 	...
 )
@@ -85,12 +93,3 @@ mails => [
 ]
 
 
-EARLIER VERSIONS:
-
-The botnet plugin has been posted on the nfsen-discuss mailinglist and I have sent it to some people on request. The differences between these versions and the initial version posted on the nfsen-plugins sourceforge project are slight, but possibly might pose some problems.
-
-The earlier versions refered to the botnet-c&c list provided by www.bleedingthreads.net as an example public botnet-c&c list. This list has not been updated since november 15 2007. However, this list is being continued on www.emergingthreads.net, so to continue using the plugin, you should make sure that you reference to the emergingthreads list in stead of the bleedingthreads one.
-
-In the earlier versions of the plugin, the example "get_botnets_bleeding-botcc" script could export a nfsen-filter by using the "-f" parameter. This functionality has been moved to the "botnet-filter" script in order to simplify the process of creating a custom "get_botnets" script.
-
-The scripts in the "emergingthreads_example" directory reflect all these changes.

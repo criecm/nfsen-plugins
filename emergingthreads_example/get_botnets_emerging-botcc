@@ -1,11 +1,22 @@
 #!/usr/bin/perl
 
-foreach my $line (<STDIN>) {
-	my $origin = "emergingthreads:".time;
+sub get_version ($) {
+	my ($filename) = @_;
+	return `stat -t $filename | cut -f 13 -d" "`;
+}
+
+$filename = $ARGV[1];
+
+my ($stamp) = get_version($filename);
+my $expire = $stamp + 86400;
+
+open(BOTNETS, "<$filename");
+
+foreach my $line (<BOTNETS>) {
 	next if ($line =~ /^\s*\#.*$/ || $line =~ /^\s*$/); # skip empty and comment lines
 
 	my ($ip_list) = $line=~m/alert ip \$HOME_NET any \-\> \[([^\]]+)\]/;
 	foreach my $ip (split(/,/,$ip_list)) {
-		print join('|',$ip, "", "", $origin)."\n";
+		print join('|',$ip, "", "", "emergingthreads", $stamp, $expire, "")."\n";
 	}
 }

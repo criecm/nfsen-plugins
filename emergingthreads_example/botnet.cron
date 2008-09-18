@@ -1,4 +1,6 @@
 #!/bin/sh
 
-wget "http://www.emergingthreats.net/rules/emerging-botcc.rules" -O - | get_botnets_emerging-botcc  > $1
-botnet_filter < $1 > $2
+cd $1
+wget "http://www.emergingthreats.net/rules/emerging-botcc.rules"  
+get_botnets_emerging-botcc emerging-botcc.rules > $2
+botnet_filter < $2 > $3
