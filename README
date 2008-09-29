@@ -18,7 +18,7 @@ To use the list with the botnet plugin, it needs to be converted to a format usa
 - time-out of the botnet-c&c (when does it become invallid)
 - botnet identification
 
-If your origional list doesn't contain port, protocol or botnet identification information you can leave these fields blank so they will be ignored. An example conversion script for the emergingthreads.net script mentioned before is included as "emerginghtreads_example/get_botnets_emergingthreads-botcc". The time-out value of the emergingthreads botnet controllers is set to 1 day after the timestamp of the list, so it is important to update the list at least daily.
+If your origional list doesn't contain port, protocol or botnet identification information you can leave these fields blank so they will be ignored. An example conversion script for the emergingthreads.net script mentioned before is included as "emerginghtreads_example/get_botnets_emergingthreads-botcc". The time-out value of the emergingthreads botnet controllers is set to 1 week after the timestamp of the list, so it is important to update the list at least weekly. But it is recomended to update at a lower interval (1 hour for example).
 
 You can use a crontab entry to download the list. After downloading the list it should be converted to a filter, which is used to increase the performance of the plugin by doing a preselection of relevant flows. The location of the filter depends on your nfsen configuration and the name you choose for the alert. The location is: 
 

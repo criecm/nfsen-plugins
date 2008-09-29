@@ -1,6 +1,12 @@
 Version 0.2:
 
-Earlier versions required the match_port and match_proto fields to be defined to denote that the plugin should match the port and protocol information. These fields aren't required anymore as the port and protocol information is automatically ommited if it is not found in the list.
+The syntax of the botnet-c&c file changed to include these extra fields:
+- botnet-c&c list source (to be able to differentiate between different sources of botnet-c&c lists)
+- botnet-c&c list timestamp (to be able to backreference to the actual list at which the c&c was reported)
+- botnet-c&c expiration time (as a form of quality control. If a c&c has been reported long ago and it's status is unknown, this field can be used to expire the c&c)
+- botnet identifier (to correlate different c&c to botnets)
+
+Earlier versions required the match_port and match_proto fields to be defined to denote that the plugin should match the port and protocol information. These fields aren't required anymore as the port and protocol information is automatically ommited if it is not found in the list. Those fields may be removed from the configuration as they are not used anymore.
 
 The example get_botnets_emerging-botcc script now doesn't support input from stdin anymore. In stead it requires an extra parameter that references to the location of the emerging-bottcc.rules file (which has to be stored on disk). This is because we can then use the timestamp of the file to identify it. The example botnet.cron script reflects this change.
 
