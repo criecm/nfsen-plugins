@@ -98,9 +98,9 @@ sub alert_condition {
 	open (BOTNETS, "-|", $conf->{import_cmd}) or die "can't import botnets";
 	my $botnets;
 	while (my ($ip, $port, $proto, $reporter, $timestamp, $timeout, $botnet_id) = split('\|',<BOTNETS>)) {
-		_DEBUG("$ip, $port, $proto, $reporter, $timestamp, $timeout, $botnet_id is timed out") and next if ($timeout > $time);
+		_DEBUG("$ip, $port, $proto, $reporter, $timestamp, $timeout, $botnet_id is timed out") and next if ($timeout <= $time);
 		$botnets->{$reporter}->{$ip} = {timestamp=>$timestamp, reporter=>$reporter, timeout=>$timeout};
-		$botnets->{$reporter}->{$ip}->{botnet_id} = $botnet_id if ($botnet_id ne "");
+		$botnets->{$reporter}->{$ip}->{botnet_id} = chomp($botnet_id) if (defined $botnet_id and chomp($botnet_id) ne "");
 		$botnets->{$reporter}->{$ip}->{port} = $port if ($port ne "");
 		$botnets->{$reporter}->{$ip}->{proto} = $proto if ($proto ne "");
 	}
@@ -108,20 +108,23 @@ sub alert_condition {
 
 	<LINES>;<LINES>;# discard the first two lines
 
+#	foreach my $reporter (keys %$botnets) {
+#		_DEBUG("reporter: ".$reporter);
+#	}
 	my $ret = 0;
 	while (my $line = <LINES>) {
 		my ($SrcIp, $Proto, $DstIp, $DstPort, $Flows) = parseLine($line);
-		#_DEBUG($DstIp);
+#		_DEBUG($DstIp);
 		foreach my $reporter (keys %$botnets) {
 			if (exists($botnets->{$reporter}->{$DstIp})) {
-	#			_DEBUG(":".$DstIp.":".$proto."-".$Proto."=".($proto eq $Proto).":".$port."-".$DstPort."=".($port eq $DstPort));
+#				_DEBUG($reporter.":".$DstIp.":".$botnets->{$reporter}->{$DstIp}->{proto}."-".$Proto."=".($botnets->{$reporter}->{$DstIp}->{proto} eq $Proto).":".$botnets->{$reporter}->{$DstIp}->{port}."-".$DstPort."=".($botnets->{$reporter}->{$DstIp}->{port} eq $DstPort));
 				if (
 					(!defined $botnets->{$reporter}->{$DstIp}->{port} or $DstPort eq $botnets->{$reporter}->{$DstIp}->{port}) and
 					(!defined $botnets->{$reporter}->{$DstIp}->{proto} or $Proto eq $botnets->{$reporter}->{$DstIp}->{proto})
 				) {
 				#and ($Proto eq $proto)) {
 #					Events::process_event({
-					my %event = {
+					my %event = (
 						"StopTime"=>"[null]",
 						"StartTime"=>"[opt]$time",
 						"UpdateTime"=>"$time",
@@ -132,8 +135,8 @@ sub alert_condition {
 						"Destination"=>"[eq]".$DstIp,
 						"Times"=>"[add]".$Flows,
 						"Reporter"=>"[eq]".$reporter,
-						"Timestamp"=>"[eq]".$botnets->{$reporter}->{$DstIp}->{timestamp},
-					};
+						"Timestamp"=>"[opt]".$botnets->{$reporter}->{$DstIp}->{timestamp},
+					);
 					$event{"Proto"}="[eq]".$botnets->{$reporter}->{$DstIp}->{proto} if defined $botnets->{$reporter}->{$DstIp}->{proto};
 					$event{"Port"}="[eq]".$botnets->{$reporter}->{$DstIp}->{port} if defined $botnets->{$reporter}->{$DstIp}->{port};
 					$event{"botnet_id"}="[eq]".$botnets->{$reporter}->{$DstIp}->{botnet_id} if defined $botnets->{$reporter}->{$DstIp}->{botnet_id};
