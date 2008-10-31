@@ -1,3 +1,10 @@
+Version 0.3:
+
+Bugfixes from Nicolas Macia 
+- get_botnets_emerging-botcc uses ARGV[1] in stead of ARGV[0]
+- the timestamp includes a \n
+- the emerging-botcc.rules should be removed after processing
+
 Version 0.2:
 
 The syntax of the botnet-c&c file changed to include these extra fields:

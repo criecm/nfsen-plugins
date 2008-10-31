@@ -5,9 +5,11 @@ sub get_version ($) {
 	return `stat -t $filename | cut -f 13 -d" "`;
 }
 
-$filename = $ARGV[1];
+$filename = $ARGV[0];
 
 my ($stamp) = get_version($filename);
+chomp($stamp);
+
 # c&c's are timed out one week after the lists age. This means that we don't accept c&c's from a list that is older than a week
 my $expire = $stamp + 86400*7; 
 
