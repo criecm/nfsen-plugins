@@ -1,10 +1,5 @@
 Version 0.2:
 
-Bugfixes from Nicolas Macia 
-- get_botnets_emerging-botcc uses ARGV[1] in stead of ARGV[0]
-- the timestamp includes a \n
-- the emerging-botcc.rules should be removed after processing
-
 Addition to documentation from Jose Manuel Agudo Cuesta:
 - Noted PHP::Serialization as a dependency
 
