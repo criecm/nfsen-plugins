@@ -28,11 +28,11 @@
 #	ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH 
 #	DAMAGE.
 #
-#  $Author:$
+#  $Author$
 #
-#  $Id:$
+#  $Id$
 #
-#  $LastChangedRevision:$
+#  $LastChangedRevision$
 #
 #
 
@@ -80,6 +80,12 @@ use Safe;
 use NfConf;
 use Nfcomm;
 use NfSen; # ISO2UNIX
+
+use PHP::Serialization qw(serialize unserialize);
+use DBI;
+
+use Sys::Syslog;
+
 our $Conf = $NfConf::PluginConf{events};
 our $VERSION = 130;
 our %cmd_lookup = (
@@ -92,7 +98,6 @@ our %cmd_lookup = (
 );
 
 
-use Sys::Syslog;
 Sys::Syslog::setlogsock('unix');
 sub _ERROR { syslog('err', __PACKAGE__.": ".shift); }
 sub _DEBUG {
@@ -109,8 +114,6 @@ sub _DEBUG {
 	
 }
 
-use PHP::Serialization qw(serialize unserialize);
-use DBI;
 our $dbh = _db_connect();
 !$dbh;
 
@@ -241,7 +244,7 @@ Strip operation fields from attributes
 
 =cut
 
-sub _strip_fields($$) {
+sub _strip_fields($@) {
 	my ($opts, @opers) = @_;
 	my %ret = ();
 	my @pairs = key_value_pairs($opts);

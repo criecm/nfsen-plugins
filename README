@@ -2,7 +2,7 @@
 
 INSTALLATION:
 
-This plugins needs mysql and the perl modules modules DBI and DBD::mysql to be installed. You can probably install them from your operating system repository, otherwise you can use CPAN to install them.
+This plugins needs mysql and the perl modules modules DBI, DBD::mysql and PHP::Serialization to be installed. You can probably install them from your operating system repository, otherwise you can use CPAN to install them.
 
 In mysql you need to create a database and create an account with the proper privileges by issuing the commands on the mysql prompt:
 
