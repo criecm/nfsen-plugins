@@ -1,3 +1,6 @@
+Version 0.3:
+- Replaced _get_where_clause with the function proposed by Rauno Tuul, which drastically increases the overall performance of the Events plugin.
+
 Version 0.2:
 
 Addition to documentation from Jose Manuel Agudo Cuesta:

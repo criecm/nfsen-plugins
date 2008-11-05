@@ -84,6 +84,9 @@ use NfSen; # ISO2UNIX
 use PHP::Serialization qw(serialize unserialize);
 use DBI;
 
+### Set trace output to a file at level 2 and prepare()
+#DBI->trace( 2, '/tmp/dbitrace.log' );
+
 use Sys::Syslog;
 
 our $Conf = $NfConf::PluginConf{events};
@@ -115,7 +118,7 @@ sub _DEBUG {
 }
 
 our $dbh = _db_connect();
-!$dbh;
+# !$dbh;
 
 my %select_conv = ( #conversion table for selection operators to sql operators
 	'eq' => "=",
@@ -175,14 +178,13 @@ sub Cleanup {
 sub run {
 	my ($opts) = @_;
 	my $ret = 1;
-   _DEBUG("timeslot: ". NfSen::ISO2UNIX($opts->{timeslot}). " alert: ". $opts->{alert}. " alertfile: ". $opts->{alertfile});
+	_DEBUG("timeslot: ". NfSen::ISO2UNIX($opts->{timeslot}). " alert: ". $opts->{alert}. " alertfile: ". $opts->{alertfile});
 	our $unix_time=NfSen::ISO2UNIX($opts->{timeslot});
 	my $compartiment = new Safe;
 	$compartiment->share(qw($unix_time));
 	foreach my $query (@{$Conf->{'periodic_queries'}}) {
 		my @pairs = key_value_pairs($query);
 		my %updated_query;
-		#while (my ($name, $value) = each(%$query)) {
 		while (scalar(@pairs)>0) {
 			my $name = shift(@pairs);
 			my $value = shift(@pairs);
@@ -291,6 +293,9 @@ inserted into the database as attributes.
 =cut
 
 sub create_event ($) {
+	# hack for mysql 5
+	our $dbh = _db_connect();
+
 	my $opts	= shift;
 	_ERROR("create_event called without 'StartTime'") and return undef unless exists $opts->{'StartTime'};
 	_ERROR("create_event called without 'UpdateTime'") and return undef unless exists $opts->{'UpdateTime'};
@@ -327,6 +332,9 @@ The function returns a list of updated event id's, or undef if no events have be
 =cut
 
 sub update_events ($) {
+	# hack for mysql 5
+	our $dbh = _db_connect();
+
 	my $opts	= shift;
 	_ERROR("update_event called without 'UpdateTime'") and return undef unless exists $opts->{'UpdateTime'};
 	my $idlist = get_event_ids($opts);
@@ -406,22 +414,29 @@ EOSQL
 
 }
 
+=item _get_where_clause
+
+Modified function to get full nested query for retrieving event_id for updating
+
+=cut
+
 sub _get_where_clause ($) {
 	my $opts = shift;
 	my $condition = "";
+	my %importance = (
+		'Source'=>'1',
+		'Destination'=>'2',
+		'botnet_id'=>'3',
+		'Reporter'=>'4'
+	);
+	my $paramid = '5';
+	my @qparams;
 	my $true_condition = "";
-	my $true_conditions = 0;
 	my $null_condition = "";
-	my $null_conditions = 0;
-	if ($opts->{'Time_Range'}) {
-		my $StartTime = substr($opts->{'StartTime'},4);
-		my $StopTime = substr($opts->{'StopTime'},4);
-		delete $opts->{'Time_Range'};
-		delete $opts->{'StartTime'};
-		delete $opts->{'EndTime'};
-		$condition = " WHERE (StartTime > $StartTime AND StartTime < $StopTime) OR (StopTime > $StartTime AND StopTime < $StopTime) OR (StartTime < $StartTime AND StopTime > $StopTime)";
-	}
+	my $true_condition_end = "";
+	#_DEBUG("_get_where_clause start...");
 	while (my ($name, $oper) = each(%$opts)) {
+		#_DEBUG("_get_where_clause. name: ".$name." oper: ".$oper);
 		if (_is_fixed_field($name)) {
 			if (ref $oper ne 'ARRAY') {
 				$oper=[$oper];
@@ -442,8 +457,6 @@ sub _get_where_clause ($) {
 				$condition .= (($condition eq "")?" WHERE ":" AND ").$clause;
 			}
 		} else {
-			my $true_attribute_conditions=0;
-			my $true_attribute_condition="";
 			if (ref $oper ne 'ARRAY') {
 				$oper=[$oper];
 			}
@@ -453,30 +466,46 @@ sub _get_where_clause ($) {
 				next if (!_contains($op, \@select_oper));
 				my $value = $2;
 				if ($op eq "null") {
-				$null_condition .= (
-					($null_conditions)?" AND ":" right join (select event_id FROM attributes GROUP BY event_id HAVING "
-				)."sum(Name=\"$name\")=0";
-					$null_conditions++;
+					$null_condition .= 
+						((!$null_condition)?((!$condition)?" WHERE":" AND")." event_id NOT IN ( SELECT event_id FROM attributes WHERE ":" OR "
+					)."Name=\"$name\"";
 				} else {
 					if ($op eq "eq") { 
 						$value="\"$value\"";
 					}
-					#TODO implement some distinction between string and numerical comparisons
-					$true_attribute_condition .= " AND Value ".$select_conv{$op}.$value;
-					$true_attribute_conditions++;
+					# insert query params to temp array
+					# _DEBUG("importance of ".$name.": ".$importance{$name});
+					if($importance{$name} gt 0) {
+						my $i = $importance{$name};
+						$qparams[$i] = "Name=\"$name\" AND Value".$select_conv{$op}.$value;
+						#_DEBUG("added qparam with importance");
+					} else {
+						$qparams[$paramid] = "Name=\"$name\" AND Value".$select_conv{$op}.$value;
+						#_DEBUG("added qparam without importance. nr: ".$paramid);
+						$paramid++;
+					}
 				}
-			}
-			if ($true_attribute_conditions) {
-				$true_condition .= (
-					($true_conditions)?" OR ":" right join (select event_id FROM attributes WHERE "
-				)."(Name=\"$name\" ".$true_attribute_condition.")";
-				$true_conditions++;
 			}
 		}
 	}
-	if ($true_conditions) { $true_condition.=" GROUP BY event_id HAVING count(name)=$true_conditions) as qtrue on (ev.event_id=qtrue.event_id) "; }
-	if ($null_conditions) { $null_condition.=") as qnull on (ev.event_id=qnull.event_id) "; }
-	return "FROM events ev ".$true_condition.$null_condition.$condition;
+	# compose the $true_condition
+	if ( @qparams > 0 ) {
+		for ($paramid=0; $paramid<@qparams; $paramid++) {
+			next if $qparams[$paramid] eq "";
+			#$true_condition .= (
+				#($true_condition)?" AND event_id IN ( SELECT event_id FROM attributes WHERE ":" right join (select event_id FROM attributes WHERE "
+			#);
+			$true_condition .= (
+				#add WHERE if this is the first attribute
+				((!$true_condition and !$null_condition and !$condition)?" WHERE":" AND")." event_id IN ( SELECT event_id FROM attributes WHERE ".$qparams[$paramid]
+			);
+			$true_condition_end .= " )";
+		}
+	}
+	if ($true_condition) { $true_condition.=$true_condition_end; }
+	if ($null_condition) { $null_condition.=")"; }
+	#_DEBUG("return: FROM events ev ".$condition.$null_condition.$true_condition);
+	return "FROM events ev ".$condition.$null_condition.$true_condition;
 }
 
 =item get_event_ids
@@ -513,13 +542,18 @@ attribute/value combinations specified in the hash.
 =cut
 
 sub get_event_count ($) {
+	
+	# hack for mysql 5
+	our $dbh = _db_connect();
+
 	my $opts	= shift;
 	my $query = $dbh->prepare("SELECT count(ev.event_id) "._get_where_clause($opts));
-	_DEBUG($opts);
-	_DEBUG("SELECT count(ev.event_id) "._get_where_clause($opts));
-	$query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr); 
+	#_DEBUG($opts);
+	#_DEBUG("get_event_count: SELECT count(ev.event_id) "._get_where_clause($opts));
+	$query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr);
+	#_DEBUG("get_event_count: query executed");
 	my @count = $query->fetchrow_array();
-	_DEBUG($count[0]);
+	#_DEBUG("sql rows: ".$count[0]);
 	my $args = {Count=>$count[0]};
 	return $args;
 }
@@ -543,13 +577,16 @@ sub get_events_serialized ($) {
 }
 
 sub get_events ($) {
+	# hack for mysql 5
+	our $dbh = _db_connect();
+
 	my $opts	= shift;
 	my $limit = "";
 	if (exists $opts->{'Limit'}) { $limit.=" LIMIT ".$opts->{'Limit'}; delete $opts->{'Limit'}; }
 	if (exists $opts->{'Offset'}) { $limit.=" OFFSET ".$opts->{'Offset'}; delete $opts->{'Offset'}; }
 	my $query="SELECT ev.event_id, starttime, stoptime, updatetime, level, profile, type "._get_where_clause($opts)." ORDER BY starttime DESC".$limit;
-	_DEBUG($opts);
-	_DEBUG($query);
+	#_DEBUG($opts);
+	#_DEBUG($query);
 	my @lines;
 	my $lines_query = $dbh->prepare($query);
 	$lines_query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr); 
@@ -570,8 +607,8 @@ sub get_events_in_timerange ($) {
 	if (exists $opts->{'Limit'}) { $limit.=" LIMIT ".$opts->{'Limit'}; delete $opts->{'Limit'}; }
 	if (exists $opts->{'Offset'}) { $limit.=" OFFSET ".$opts->{'Offset'}; delete $opts->{'Offset'}; }
 	my $query="SELECT ev.event_id, starttime, stoptime, updatetime, level, profile, type "._get_where_clause($opts)." ORDER BY starttime DESC".$limit;
-	_DEBUG($opts);
-	_DEBUG($query);
+	#_DEBUG($opts);
+	#_DEBUG($query);
 	my @lines;
 	my $lines_query = $dbh->prepare($query);
 	$lines_query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr); 
