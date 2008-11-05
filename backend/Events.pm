@@ -193,6 +193,18 @@ sub run {
 		}
 		$ret=0 if (update_events(\%updated_query) == undef);
 	}
+	foreach my $query (@{$Conf->{'delete_queries'}}) {
+		my @pairs = key_value_pairs($query);
+		my %updated_query;
+		while (scalar(@pairs)>0) {
+			my $name = shift(@pairs);
+			my $value = shift(@pairs);
+			$value=~s/\#([^\#]*)\#/$compartiment->reval($1)/eg;
+			add_value(\%updated_query,$name,$value);
+		}
+		$ret=0 if (!(delete_events(\%updated_query)));
+	}
+
 	return $ret;
 }
 
@@ -321,6 +333,33 @@ EOSQL
 	$opts->{EventId} = $args->{EventId};
 	_add_attributes($opts);
 	return $args;
+}
+
+=item delete_events
+
+This function deletes events in the event database. It takes a reference to a hash list as 
+argument, that defines which events should be deleted.
+The function returns the number of deleted events, or 0E0 if no events have been deleted (which 
+is equal to 0 but evaluates as true). It returns false if the query failed.
+
+=cut
+
+sub delete_events ($) {
+	# hack for mysql 5
+	our $dbh = _db_connect();
+
+	my $opts	= shift;
+
+	my $query = "DELETE "._get_where_clause($opts);
+	 _DEBUG("Delete query: ".$query);
+	
+	my $query_handle = $dbh->prepare($query);
+	my $rows = $query_handle->execute;
+	if (!$rows) {
+		_ERROR("SQL ERROR: " . $dbh->errstr);
+		return $rows;
+	} 	
+	return $rows;
 }
 
 =item update_events
@@ -504,8 +543,8 @@ sub _get_where_clause ($) {
 	}
 	if ($true_condition) { $true_condition.=$true_condition_end; }
 	if ($null_condition) { $null_condition.=")"; }
-	#_DEBUG("return: FROM events ev ".$condition.$null_condition.$true_condition);
-	return "FROM events ev ".$condition.$null_condition.$true_condition;
+	#_DEBUG("return: FROM events ".$condition.$null_condition.$true_condition);
+	return "FROM events ".$condition.$null_condition.$true_condition;
 }
 
 =item get_event_ids

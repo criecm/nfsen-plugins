@@ -1,5 +1,3 @@
-
-
 INSTALLATION:
 
 This plugins needs mysql and the perl modules modules DBI, DBD::mysql and PHP::Serialization to be installed. You can probably install them from your operating system repository, otherwise you can use CPAN to install them.
@@ -25,4 +23,15 @@ events  => {
 To enable the plugin, add the following line to the @plugins list in your nfsen.conf file:
 [ "live",  'Events' ],
 
+KEEPING THE DATABASE CLEAN:
 
+You can periodically clean up the database by using the 'delete_queries' variable:
+
+%PluginConf = (
+	delete_queries          => [
+		{ # Delete events after 14 days (14 days*24 hour*60 minute*60 seconds=1209600 seconds)    
+			"StopTime"=>['[le]#$unix_time-1209600#'],
+		}
+	...
+	],
+	...
