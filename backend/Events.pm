@@ -485,7 +485,6 @@ sub _get_where_clause ($) {
 				my $op = $1;
 				next if (!_contains($op, \@select_oper));
 				my $value = $2;
-				if ($name eq 'event_id') {$name='ev.event_id'; }
 				my $clause;
 				if ($op eq "null") {
 					$clause="$name IS NULL";
@@ -556,10 +555,10 @@ attribute/value combinations specified in the hash.
 
 sub get_event_ids ($) {
 	my ($opts) = shift;
-	my $query = "SELECT ev.event_id "._get_where_clause($opts);
+	my $query = "SELECT event_id "._get_where_clause($opts);
 	#_DEBUG($query);
 	my $query_handle = $dbh->prepare($query);
-	#my $query_handle = $dbh->prepare("SELECT ev.event_id "._get_where_clause($opts));
+	#my $query_handle = $dbh->prepare("SELECT event_id "._get_where_clause($opts));
 	if (!$query_handle->execute) {
 		_ERROR("SQL ERROR: " . $dbh->errstr);
 		return undef;
@@ -586,9 +585,9 @@ sub get_event_count ($) {
 	our $dbh = _db_connect();
 
 	my $opts	= shift;
-	my $query = $dbh->prepare("SELECT count(ev.event_id) "._get_where_clause($opts));
+	my $query = $dbh->prepare("SELECT count(event_id) "._get_where_clause($opts));
 	#_DEBUG($opts);
-	#_DEBUG("get_event_count: SELECT count(ev.event_id) "._get_where_clause($opts));
+	#_DEBUG("get_event_count: SELECT count(event_id) "._get_where_clause($opts));
 	$query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr);
 	#_DEBUG("get_event_count: query executed");
 	my @count = $query->fetchrow_array();
@@ -623,7 +622,7 @@ sub get_events ($) {
 	my $limit = "";
 	if (exists $opts->{'Limit'}) { $limit.=" LIMIT ".$opts->{'Limit'}; delete $opts->{'Limit'}; }
 	if (exists $opts->{'Offset'}) { $limit.=" OFFSET ".$opts->{'Offset'}; delete $opts->{'Offset'}; }
-	my $query="SELECT ev.event_id, starttime, stoptime, updatetime, level, profile, type "._get_where_clause($opts)." ORDER BY starttime DESC".$limit;
+	my $query="SELECT event_id, starttime, stoptime, updatetime, level, profile, type "._get_where_clause($opts)." ORDER BY starttime DESC".$limit;
 	#_DEBUG($opts);
 	#_DEBUG($query);
 	my @lines;
@@ -645,7 +644,7 @@ sub get_events_in_timerange ($) {
 	my $limit = "";
 	if (exists $opts->{'Limit'}) { $limit.=" LIMIT ".$opts->{'Limit'}; delete $opts->{'Limit'}; }
 	if (exists $opts->{'Offset'}) { $limit.=" OFFSET ".$opts->{'Offset'}; delete $opts->{'Offset'}; }
-	my $query="SELECT ev.event_id, starttime, stoptime, updatetime, level, profile, type "._get_where_clause($opts)." ORDER BY starttime DESC".$limit;
+	my $query="SELECT event_id, starttime, stoptime, updatetime, level, profile, type "._get_where_clause($opts)." ORDER BY starttime DESC".$limit;
 	#_DEBUG($opts);
 	#_DEBUG($query);
 	my @lines;
