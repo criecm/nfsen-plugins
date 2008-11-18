@@ -56,40 +56,51 @@ Most botnet-c&c's use commonly used protocols, and it might not be safe to assum
 
 Furthermore, this plugin doesn't directly report every connection, but in stead reports to the nfsen-events plugin. The events plugin can be used to collect more information about the traffic pattern between the possible bot and the controller. For example, most connections to legitimate servers are expected to be limited in duration, so we can reduce the posibility of false positives by reporting only those hosts that regularly connect during a reasonable timespan. This can be illustrated by the nfsen-events configuration we currently use in production:
 
-periodic_queries => [
-	{ # Botnet events are timed out 8 hour after the last update
-		"Type"=>"[eq]botnet",
-		"UpdateTime"=>['[le]#$unix_time-28800#','#$unix_time#'],
-		"StopTime"=>["[null]",'#$unix_time#'],
+%PluginConf = (
+	events => {
+		...
+		periodic_queries => [
+			{ # Botnet events are timed out 8 hour after the last update
+				"Type"=>"[eq]botnet",
+				"UpdateTime"=>['[le]#$unix_time-28800#','#$unix_time#'],
+				"StopTime"=>["[null]",'#$unix_time#'],
+			},
+			{ # Botnet events are upgraded if the bot contacted the controller more than 20 times
+				"Type"=>"[eq]botnet",
+				"Times"=>"[ge]20",
+				"UpdateTime"=>'#$unix_time#',
+				"Level"=>["[eq]notify","alarm"],
+			},
+			....
+		],
+		...
 	},
-	{ # Botnet events are upgraded if the bot contacted the controller more than 20 times
-		"Type"=>"[eq]botnet",
-		"Times"=>"[ge]20",
-		"UpdateTime"=>'#$unix_time#',
-		"Level"=>["[eq]notify","alarm"],
-	},
-	....
-	]
+	...
 
 The first section says that we time out a suspected bot if we don't hear about it for 8 hours. The second section upgrades suspected bot events to "alarm" level when we observe 20 or more connections before it has been timed out. Note that our production system uses a 1:100 sampling rate, so this effectively means that we expect hosts to be bots when they connect approximately 2000 times ore more to a botnet-c&c within a time period of 8 hours. You can use the nfsen-events-mail plugin to send out an email for every bot-event that has been upgraded to "alarm" level:
 
-mails => [
-	{       
-		query => { # send a mail for suspected bots
-			"Type"=>"[eq]botnet",
-			"Level"=>"[eq]alarm",
-			"Notified"=>"[null]",
-		},
-		to => ['person1@domain1.com','person2@domain2.com'],
-		subject => '[Nfsen: botnet] source host: $event{Source} destination host: $event{Destination}',
-		template => "botnet_iodef.tp",
-		action => { # Make sure not to report it again before it times out
-			"Type"=>"[eq]botnet",
-			"Level"=>"[eq]alarm",
-			"Notified"=>["[null]",'[set]#$unix_time#'],
-			"UpdateTime"=>'[set]#$unix_time#',
-		},
+%PluginConf = (
+	events_mail => {
+		...
+		mails => [
+			{       
+				query => { # send a mail for suspected bots
+					"Type"=>"[eq]botnet",
+					"Level"=>"[eq]alarm",
+					"Notified"=>"[null]",
+				},
+				to => ['person1@domain1.com','person2@domain2.com'],
+				subject => '[Nfsen: botnet] source host: $event{Source} destination host: $event{Destination}',
+				template => "botnet_iodef.tp",
+				action => { # Make sure not to report it again before it times out
+					"Type"=>"[eq]botnet",
+					"Level"=>"[eq]alarm",
+					"Notified"=>["[null]",'[set]#$unix_time#'],
+					"UpdateTime"=>'[set]#$unix_time#',
+				},
+			},
+		],
+		...
 	},
-]
-
+	...
 
