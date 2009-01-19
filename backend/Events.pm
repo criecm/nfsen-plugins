@@ -168,7 +168,8 @@ sub _contains ($$) {
 sub process_event($) {
 	my $opts = shift;
 	if (scalar @{update_events(_remove_attributes($opts, "opt"))}==0) {
-		create_event(_remove_attributes(_strip_fields($opts, "opt", "add", keys %select_conv),"null"));
+		#TODO: rewrite this in something more readable
+		create_event( _remove_attributes( _replace_operator( _replace_operator( $opts , "set", "opt", "add", keys %select_conv) , "dset", "dopt") ,"null"));
 	}
 }
 
@@ -251,15 +252,14 @@ sub _remove_attributes($$) {
 	return \%ret;
 }
 
+=item _replace_operator
 
-=item _strip_fields
-
-Strip operation fields from attributes
+Replace operator from attributes
 
 =cut
 
-sub _strip_fields($@) {
-	my ($opts, @opers) = @_;
+sub _replace_operator($@) {
+	my ($opts, $newoper, @opers) = @_;
 	my %ret = ();
 	my @pairs = key_value_pairs($opts);
 	while (scalar(@pairs)>0) {
@@ -269,7 +269,7 @@ sub _strip_fields($@) {
 			my $oper = $1;
 			my $val = $2;
 			if ( _contains($oper, \@opers) ) {
-				add_value(\%ret,$name,$val);
+				add_value(\%ret,$name,"[$newoper]".$val);
 			} else {
 				add_value(\%ret,$name,$value);
 			}
@@ -295,6 +295,16 @@ sub key_value_pairs($) {
 	return @pairs;
 }
 
+sub _get_operator($) {
+	my $val = shift;
+	my ($oper, $value);
+	if ($val=~m/^\s*\[(\w+)\](.*)/) {
+		$oper = $1; $value = $2;
+	} else {
+		$oper = "set"; $value = $val;
+	}
+	return ($oper, $value);
+}
 
 =item create_event
 
@@ -311,22 +321,30 @@ sub create_event ($) {
 	my $opts	= shift;
 	_ERROR("create_event called without 'StartTime'") and return undef unless exists $opts->{'StartTime'};
 	_ERROR("create_event called without 'UpdateTime'") and return undef unless exists $opts->{'UpdateTime'};
+	_ERROR("create_event called without 'Level'") and return undef unless exists $opts->{'Level'};
 	_ERROR("create_event called without 'Profile'") and return undef unless exists $opts->{'Profile'};
 	_ERROR("create_event called without 'Type'") and return undef unless exists $opts->{'Type'};
 	$opts->{Level} ||= "Debug";
+	my @params;
+	foreach my $name ("StartTime", "UpdateTime", "Level", "Profile", "Type", "StopTime") {
+		if (exists($opts->{$name})) { # this is only nescesary for StopTime
+			my ($op, $val) = _get_operator($opts->{$name});
+			push(@params, $val); # ignore the operator
+		}
+	}
 	my $query;
 	if ( !exists $opts->{'StopTime'} ) {
 		$query = <<EOSQL;
 			INSERT INTO events (starttime, updatetime, level, profile, type) 
-			VALUES ($opts->{'StartTime'}, $opts->{'UpdateTime'}, "$opts->{'Level'}", "$opts->{'Profile'}", "$opts->{'Type'}")
+			VALUES (?, ?, ?, ?, ?)
 EOSQL
 	} else {
 		$query = <<EOSQL;
-			INSERT INTO events (starttime, updatetime, stoptime, level, profile, type) 
-			VALUES ($opts->{'StartTime'}, $opts->{'UpdateTime'}, $opts->{'StopTime'}, "$opts->{'Level'}", "$opts->{'Profile'}", "$opts->{'Type'}")
+			INSERT INTO events (starttime, updatetime, level, profile, type, stoptime) 
+			VALUES (?, ?, ?, ?, ?, ?)
 EOSQL
 	}
-	my $query_handle = $dbh->do($query) || _ERROR("SQL ERROR: ".$dbh->errstr); 
+	my $query_handle = $dbh->do($query,{}, @params) || _ERROR("SQL ERROR: ".$dbh->errstr); 
 #	my $args = {EventId=>$dbh->func('last_insert_rowid')};
 #	my $args = {EventId=>$dbh->last_insert_id};
 	my $args = {EventId=>$dbh->{'mysql_insertid'}};
@@ -381,25 +399,23 @@ sub update_events ($) {
 	my $condition = "";
 
 	my $query = "INSERT INTO attributes (event_id, name, value) VALUES (?, ?, ?)";
+	my $distinct_query = "INSERT INTO attributes (event_id, name, value) SELECT ? as i, ? as n, ? as v FROM DUAL WHERE NOT EXISTS ( SELECT * FROM attributes WHERE name=n AND event_id=i AND value=v)";
+
 	my $query_handle = $dbh->prepare($query) or _ERROR("SQL ERROR: ".$dbh->errstr);
+	my $distinct_query_handle = $dbh->prepare($distinct_query) or _ERROR("SQL ERROR: ".$dbh->errstr);
 
 	my @pairs = key_value_pairs($opts);
 	while (scalar(@pairs)>0) {
 		my $name = shift(@pairs);
 		my $val = shift(@pairs);
-		my $oper; my $value;
-		if ($val=~m/^\s*\[(\w+)\](.*)/) {
-			$oper = $1; $value = $2;
-		} else {
-			$oper = "set"; $value = $val;
-		}
+		my ($oper, $value) = _get_operator($val);
 		next if (_contains($oper, \@select_oper));
 		if (_is_fixed_field($name)) {
 			my $clause;
 			if ($oper eq "null") {
 				$clause="$name=NULL" ;
 			} else {
-				if ($oper eq "set") {
+				if (($oper eq "set") or ($oper eq "dset")) {
 					$clause = "$name=\"$value\"";
 				} elsif ($oper eq "add") {
 					$clause = "$name=$name + $value";
@@ -407,18 +423,21 @@ sub update_events ($) {
 			}
 			$condition .= (($condition eq "")?" SET ":" , ").$clause;
 		} else {	
-			my $clause;
 			if ($oper eq "set") {
-				$clause = "Value=\"$value\"";
 				$query_handle->execute_array({}, $idlist, $name, $value) or _ERROR("SQL ERROR: ".$dbh->errstr);
+			} elsif ($oper eq "dset") {
+				foreach my $id (@$idlist) {
+					$distinct_query_handle->execute_array({}, $id, $name, $value) or _ERROR("SQL ERROR: ".$dbh->errstr);
+				}
 			} elsif ($oper eq "add") {
-				$clause = "Value=Value + $value";
+				my $clause = "Value=Value + $value";
 				$dbh->do("UPDATE attributes SET ".$clause." WHERE Name=\"".$name."\" AND Event_id IN (".join(",",@$idlist).")")
 					or (_ERROR("SQL ERROR: ".$dbh->errstr)); 
 			}
 		}
 	}
 	if ($condition) {
+		_DEBUG("UPDATE: "."UPDATE events ".$condition." WHERE Event_id IN (".join(",",@$idlist).")");
 		$dbh->do("UPDATE events ".$condition." WHERE Event_id IN (".join(",",@$idlist).")")
 			or (_ERROR("SQL ERROR: ".$dbh->errstr)); 
 	}
@@ -436,19 +455,26 @@ sub _add_attributes ($) {
 	my $opts = shift;
 	_ERROR("add_attributes called without 'EventId'") and return unless exists $opts->{'EventId'};
 	my $event_id = $opts->{'EventId'};
-	my $query = <<EOSQL;
-		INSERT INTO attributes (event_id, name, value)
-		VALUES ($event_id, ?, ?)
-EOSQL
+	
+	my $query = "INSERT INTO attributes (event_id, name, value) VALUES (?, ?, ?)";
+	my $distinct_query = "INSERT INTO attributes (event_id, name, value) SELECT ? as i, ? as n, ? as v FROM DUAL WHERE NOT EXISTS ( SELECT * FROM attributes WHERE name=n AND event_id=i AND value=v)";
+	
 	my $query_handle = $dbh->prepare($query) || _ERROR("SQL ERROR: ".$dbh->errstr); 
+	my $distinct_query_handle = $dbh->prepare($distinct_query) || _ERROR("SQL ERROR: ".$dbh->errstr); 
 	my @pairs = key_value_pairs($opts);
 	while (scalar(@pairs)>0) {
 		my $name = shift(@pairs);
-		my $value = shift(@pairs);
+		my $val = shift(@pairs);
+		my ($oper, $value) = _get_operator($val);
+
 		next if _is_fixed_field($name);
-		$query_handle->bind_param(1, $name);
-		$query_handle->bind_param(2, $value);
-		$query_handle->execute or _ERROR("SQL ERROR: ".$dbh->errstr); 
+		if ($oper eq "set") {
+			$query_handle->execute($event_id, $name, $value) or _ERROR("SQL ERROR: ".$dbh->errstr); 
+		} elsif ($oper eq "dset") {
+			$distinct_query_handle->execute($event_id, $name, $value) or _ERROR("SQL ERROR: ".$dbh->errstr); 
+		} else {
+			_ERROR("Unexpected operator: ".$oper);
+		}
 	}
 
 }
@@ -475,11 +501,11 @@ sub _get_where_clause ($) {
 	my $true_condition_end = "";
 	#_DEBUG("_get_where_clause start...");
 	while (my ($name, $oper) = each(%$opts)) {
+		if (ref $oper ne 'ARRAY') {
+			$oper=[$oper];
+		}
 		#_DEBUG("_get_where_clause. name: ".$name." oper: ".$oper);
 		if (_is_fixed_field($name)) {
-			if (ref $oper ne 'ARRAY') {
-				$oper=[$oper];
-			}
 			foreach my $op (@$oper) {
 				next if ($op !~ m/^\s*\[(\w+)\](.*)/);
 				my $op = $1;
@@ -495,9 +521,6 @@ sub _get_where_clause ($) {
 				$condition .= (($condition eq "")?" WHERE ":" AND ").$clause;
 			}
 		} else {
-			if (ref $oper ne 'ARRAY') {
-				$oper=[$oper];
-			}
 			foreach my $op (@$oper) {
 				next if ($op !~ m/^\s*\[(\w+)\](.*)/);
 				my $op = $1;
@@ -530,9 +553,6 @@ sub _get_where_clause ($) {
 	if ( @qparams > 0 ) {
 		for ($paramid=0; $paramid<@qparams; $paramid++) {
 			next if $qparams[$paramid] eq "";
-			#$true_condition .= (
-				#($true_condition)?" AND event_id IN ( SELECT event_id FROM attributes WHERE ":" right join (select event_id FROM attributes WHERE "
-			#);
 			$true_condition .= (
 				#add WHERE if this is the first attribute
 				((!$true_condition and !$null_condition and !$condition)?" WHERE":" AND")." event_id IN ( SELECT event_id FROM attributes WHERE ".$qparams[$paramid]
@@ -558,7 +578,6 @@ sub get_event_ids ($) {
 	my $query = "SELECT event_id "._get_where_clause($opts);
 	#_DEBUG($query);
 	my $query_handle = $dbh->prepare($query);
-	#my $query_handle = $dbh->prepare("SELECT event_id "._get_where_clause($opts));
 	if (!$query_handle->execute) {
 		_ERROR("SQL ERROR: " . $dbh->errstr);
 		return undef;
@@ -586,10 +605,7 @@ sub get_event_count ($) {
 
 	my $opts	= shift;
 	my $query = $dbh->prepare("SELECT count(event_id) "._get_where_clause($opts));
-	#_DEBUG($opts);
-	#_DEBUG("get_event_count: SELECT count(event_id) "._get_where_clause($opts));
 	$query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr);
-	#_DEBUG("get_event_count: query executed");
 	my @count = $query->fetchrow_array();
 	#_DEBUG("sql rows: ".$count[0]);
 	my $args = {Count=>$count[0]};
@@ -623,14 +639,12 @@ sub get_events ($) {
 	if (exists $opts->{'Limit'}) { $limit.=" LIMIT ".$opts->{'Limit'}; delete $opts->{'Limit'}; }
 	if (exists $opts->{'Offset'}) { $limit.=" OFFSET ".$opts->{'Offset'}; delete $opts->{'Offset'}; }
 	my $query="SELECT event_id, starttime, stoptime, updatetime, level, profile, type "._get_where_clause($opts)." ORDER BY starttime DESC".$limit;
-	#_DEBUG($opts);
-	#_DEBUG($query);
 	my @lines;
 	my $lines_query = $dbh->prepare($query);
 	$lines_query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr); 
 	while (my $line = $lines_query->fetchrow_hashref()) {
-		my $attributes_query = $dbh->prepare("SELECT name, value FROM attributes WHERE event_id=".$line->{event_id}." ORDER BY name");
-		$attributes_query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr); 
+		my $attributes_query = $dbh->prepare("SELECT name, value FROM attributes WHERE event_id=? ORDER BY name");
+		$attributes_query->execute($line->{event_id}) || _ERROR("SQL ERROR: ".$dbh->errstr); 
 		while (my ($name, $value) = $attributes_query->fetchrow_array()) {
 			add_value($line, $name, $value);
 		}
@@ -645,14 +659,12 @@ sub get_events_in_timerange ($) {
 	if (exists $opts->{'Limit'}) { $limit.=" LIMIT ".$opts->{'Limit'}; delete $opts->{'Limit'}; }
 	if (exists $opts->{'Offset'}) { $limit.=" OFFSET ".$opts->{'Offset'}; delete $opts->{'Offset'}; }
 	my $query="SELECT event_id, starttime, stoptime, updatetime, level, profile, type "._get_where_clause($opts)." ORDER BY starttime DESC".$limit;
-	#_DEBUG($opts);
-	#_DEBUG($query);
 	my @lines;
 	my $lines_query = $dbh->prepare($query);
 	$lines_query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr); 
 	while (my $line = $lines_query->fetchrow_hashref()) {
-		my $attributes_query = $dbh->prepare("SELECT name, value FROM attributes WHERE event_id=".$line->{event_id}." ORDER BY name");
-		$attributes_query->execute() || _ERROR("SQL ERROR: ".$dbh->errstr); 
+		my $attributes_query = $dbh->prepare("SELECT name, value FROM attributes WHERE event_id=? ORDER BY name");
+		$attributes_query->execute($line->{event_id}) || _ERROR("SQL ERROR: ".$dbh->errstr); 
 		while (my ($name, $value) = $attributes_query->fetchrow_array()) {
 			add_value($line, $name, $value);
 		}
@@ -681,5 +693,4 @@ sub _db_connect () {
 =back
 
 =cut
-
 $dbh
