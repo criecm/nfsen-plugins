@@ -1,3 +1,3 @@
-"A suspected bot (".$event{'Source'}.": " .&lookup_address($event{'Source'}).") contacted the known botnet C&C (".$event{'Destination'}." ".((defined $event{botnet_id})?'['.join(',',@{$event{'botnet_id'}}).']':'').": ".&lookup_address($event{'Destination'}).") from botnet list: ".$event{'origin'}." $event{'Times'} times between ".scalar(localtime($event{'starttime'}))." and ".scalar(localtime($event{'updatetime'})).".
+"A suspected bot (".$event{'Source'}.": " .&lookup_address($event{'Source'}).") contacted the known botnet C&C (".$event{'Destination'}." ".((defined $event{botnet_id})?'['.&cjoin(',',$event{'botnet_id'}).']':'').": ".&lookup_address($event{'Destination'}).") from botnet list: ".$event{'origin'}." $event{'Times'} times between ".scalar(localtime($event{'starttime'}))." and ".scalar(localtime($event{'updatetime'})).".
 
-The botnet was reported by: [".join(',',@{$event{'Reporter'}})."] at [".join(',',&to_localtime(@{$event{'Timestamp'}}))."]."
+The botnet was reported by: [".&cjoin(',',$event{'Reporter'})."] at [".&cjoin(',',&to_localtime($event{'Timestamp'}))."]."
