@@ -99,51 +99,48 @@ sub alert_condition {
 	my $botnets;
 	while (my ($ip, $port, $proto, $reporter, $timestamp, $timeout, $botnet_id) = split('\|',<BOTNETS>)) {
 		_DEBUG("$ip, $port, $proto, $reporter, $timestamp, $timeout, $botnet_id is timed out") and next if ($timeout <= $time);
-		$botnets->{$reporter}->{$ip} = {timestamp=>$timestamp, reporter=>$reporter, timeout=>$timeout};
-		$botnets->{$reporter}->{$ip}->{botnet_id} = chomp($botnet_id) if (defined $botnet_id and chomp($botnet_id) ne "");
-		$botnets->{$reporter}->{$ip}->{port} = $port if ($port ne "");
-		$botnets->{$reporter}->{$ip}->{proto} = $proto if ($proto ne "");
+		my $botnet = {timestamp=>$timestamp, reporter=>$reporter, timeout=>$timeout};
+		$botnet->{botnet_id} = chomp($botnet_id) if (defined $botnet_id and chomp($botnet_id) ne "");
+		if (!exists $botnets->{$ip}->{$port}->{$proto}) {
+			$botnets->{$ip}->{$port}->{$proto} = ( $botnet );
+		} else {
+			push(@{$botnets->{$ip}->{$port}->{$proto}}, $botnet);
+		}
 	}
 	close(BOTNETS);
 
 	<LINES>;<LINES>;# discard the first two lines
 
-#	foreach my $reporter (keys %$botnets) {
-#		_DEBUG("reporter: ".$reporter);
-#	}
 	my $ret = 0;
 	while (my $line = <LINES>) {
 		my ($SrcIp, $Proto, $DstIp, $DstPort, $Flows) = parseLine($line);
-#		_DEBUG($DstIp);
-		foreach my $reporter (keys %$botnets) {
-			if (exists($botnets->{$reporter}->{$DstIp})) {
+		for (my $i=0;$i<4;$i++) { # check for all permutation of empty values for the port and protocol.
+			my $port = ($i<2)?$DstPort:""; 
+			my $proto = ($i==0 || $i==2)?$Proto:"";
+			if ( exists($botnets->{$DstIp}->{$port}->{$Proto}) ) {
+				my $botnet = $botnets->{$DstIp}->{$port}->{$Proto};
 #				_DEBUG($reporter.":".$DstIp.":".$botnets->{$reporter}->{$DstIp}->{proto}."-".$Proto."=".($botnets->{$reporter}->{$DstIp}->{proto} eq $Proto).":".$botnets->{$reporter}->{$DstIp}->{port}."-".$DstPort."=".($botnets->{$reporter}->{$DstIp}->{port} eq $DstPort));
-				if (
-					(!defined $botnets->{$reporter}->{$DstIp}->{port} or $DstPort eq $botnets->{$reporter}->{$DstIp}->{port}) and
-					(!defined $botnets->{$reporter}->{$DstIp}->{proto} or $Proto eq $botnets->{$reporter}->{$DstIp}->{proto})
-				) {
-				#and ($Proto eq $proto)) {
-#					Events::process_event({
-					my %event = (
-						"StopTime"=>"[null]",
-						"StartTime"=>"[opt]$time",
-						"UpdateTime"=>"$time",
-						"Type"=>"[eq]botnet",
-						"Level"=>"[opt]notify",
-						"Profile"=>"[eq]./live",
-						"Source"=>"[eq]".$SrcIp,
-						"Destination"=>"[eq]".$DstIp,
-						"Times"=>"[add]".$Flows,
-						"Reporter"=>"[eq]".$reporter,
-						"Timestamp"=>"[opt]".$botnets->{$reporter}->{$DstIp}->{timestamp},
-					);
-					$event{"Proto"}="[eq]".$botnets->{$reporter}->{$DstIp}->{proto} if defined $botnets->{$reporter}->{$DstIp}->{proto};
-					$event{"Port"}="[eq]".$botnets->{$reporter}->{$DstIp}->{port} if defined $botnets->{$reporter}->{$DstIp}->{port};
-					$event{"botnet_id"}="[eq]".$botnets->{$reporter}->{$DstIp}->{botnet_id} if defined $botnets->{$reporter}->{$DstIp}->{botnet_id};
-					Events::process_event(\%event);
-
-					$ret = 1;
+				my %event = (
+					"StopTime"=>"[null]",
+					"StartTime"=>"[opt]$time",
+					"UpdateTime"=>"$time",
+					"Type"=>"[eq]botnet",
+					"Level"=>"[opt]notify",
+					"Profile"=>"[eq]./live",
+					"Source"=>"[eq]".$SrcIp,
+					"Destination"=>"[eq]".$DstIp,
+					"Times"=>"[add]".$Flows,
+				);
+				foreach my $reporter (@$botnet) {
+					push(@{$event{"Reporter"}},"[dset]".$reporter->{reporter});
+					push(@{$event{"Timestamp"}},"[dset]".$reporter->{timestamp});
+					push(@{$event{"botnet_id"}},"[dset]".$reporter->{botnet_id}) if defined $reporter->{botnet_id};
 				}
+				$event{"Proto"}="[eq]".$proto if $proto ne "";
+				$event{"Port"}="[eq]".$port if $port ne "";
+				Events::process_event(\%event);
+
+				$ret = 1;
 			}
 		}
 	}
