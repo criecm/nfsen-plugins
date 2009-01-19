@@ -78,8 +78,8 @@ sub run {
 		foreach my $event (@$events) {	
 			my $compartiment = new Safe;
 			our %event=%$event;
-			$compartiment->permit(qw(localtime join));
-			$compartiment->share(qw($unix_time %event &lookup_address &to_ISO8601 &to_localtime));
+			$compartiment->permit(qw(localtime));
+			$compartiment->share(qw($unix_time %event &lookup_address &to_ISO8601 &to_localtime &cjoin));
 			_ERROR("Can't parse subject line: $mail->{'subject'}: ".join(',',$@)) and next unless my $subject=$compartiment->reval("\"".$mail->{'subject'}."\"");
 			my $body;
 			if (defined $mail->{'template'}) {
@@ -90,8 +90,8 @@ sub run {
 			mail($body, $mail->{'to'}, $subject);
 		}
 		my $compartiment = new Safe;
-		$compartiment->permit(qw(localtime join));
-		$compartiment->share(qw($unix_time &lookup_address &to_ISO8601 &to_localtime));
+		$compartiment->permit(qw(localtime));
+		$compartiment->share(qw($unix_time &lookup_address &to_ISO8601 &to_localtime &cjoin));
 
 		my $action = $mail->{'action'};
 		@pairs = key_value_pairs($action);
@@ -111,7 +111,13 @@ sub lookup_address ($) {
 	return gethostbyaddr(inet_aton(shift), Socket::AF_INET); 
 }
 
-sub to_ISO8601 () {
+sub cjoin {
+	my ($char, $val) = @_;
+	return $val if (ref $val ne 'ARRAY');
+	return join($char,@{$val});
+}
+
+sub to_ISO8601 {
 	my @ret;
 	while (my $time = shift) {
 		push @ret,strftime("%Y-%m-%dT%H:%M:%S", localtime($time));
@@ -120,7 +126,7 @@ sub to_ISO8601 () {
 	return @ret;
 }
 
-sub to_localtime () {
+sub to_localtime {
 	my @ret;
 	while (my $time = shift) {
 		push @ret,scalar(localtime($time));
