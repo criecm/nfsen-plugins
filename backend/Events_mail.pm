@@ -28,11 +28,11 @@
 #	ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH 
 #	DAMAGE.
 #
-#  $Author:$
+#  $Author$
 #
-#  $Id:$
+#  $Id$
 #
-#  $LastChangedRevision:$
+#  $LastChangedRevision$
 #
 #
 
@@ -78,7 +78,6 @@ sub run {
 		foreach my $event (@$events) {	
 			my $compartiment = new Safe;
 			our %event=%$event;
-			our $unix_time=NfSen::ISO2UNIX($opts->{timeslot});
 			$compartiment->permit('localtime');
 			$compartiment->share(qw($unix_time %event &lookup_address &to_ISO8601));
 			_ERROR("Can't parse subject line: $mail->{'subject'}: ".join(',',$@)) and next unless my $subject=$compartiment->reval("\"".$mail->{'subject'}."\"");
@@ -91,12 +90,11 @@ sub run {
 			mail($body, $mail->{'to'}, $subject);
 		}
 		my $compartiment = new Safe;
-		our $unix_time=NfSen::ISO2UNIX($opts->{timeslot});
 		$compartiment->permit('localtime');
 		$compartiment->share(qw($unix_time &lookup_address &to_ISO8601));
 
 		my $action = $mail->{'action'};
-		my @pairs = key_value_pairs($action);
+		@pairs = key_value_pairs($action);
 		my %updated_action;
 		while (scalar(@pairs)>1) {
 			my $key = shift(@pairs);
