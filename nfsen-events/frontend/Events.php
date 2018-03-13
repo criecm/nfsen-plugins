@@ -1,4 +1,4 @@
-<?
+<?php
 /*
  *  vim: ts=4 sw=3:
  *
@@ -127,7 +127,7 @@ function DisplayTable( $count, $Offset, $Limit, $filter ) {
 			<TD> Attributes </TD>
 			<TD> Actions </TD>
 		</TR>
-<?
+<?php
 	$output = nfsend_query("Events::get_events_serialized", array_merge(array('Limit'=>$Limit,'Offset'=>$Offset),$filter));
 	foreach ($output['Lines'] as $serline) {
 		$line = unserialize($serline);
@@ -144,12 +144,12 @@ function DisplayTable( $count, $Offset, $Limit, $filter ) {
 			<TD><?=show_attributes($line)?></TD>
 			<TD><?=show_actions($line)?></TD>
 		</TR>
-<?
+<?php
 	}
 ?>
 	</TABLE> 
 
-<?
+<?php
 }
 
 function build_filter_array( $Filter ) {
@@ -188,31 +188,31 @@ function Events_Run( $plugin_id ) {
 	$count = nfsend_query("Events::get_event_count", $filter_array);
 	$count = $count['Count'];
 ?>	
-	<FORM METHOD="post" ACTION="<?$self?>">
+	<FORM METHOD="post" ACTION="<?=$self?>">
 		<INPUT TYPE="hidden" NAME="Limit" VALUE="<?=$process_form["Limit"]?>">
 		<INPUT TYPE="hidden" NAME="Offset" VALUE="<?=($Offset<$Limit)?0:$Offset-$Limit ?>">
 		<INPUT TYPE="text" NAME="Filter" VALUE="<?=$Filter ?>">
 		<INPUT TYPE="submit" VALUE="filter">
 	</FORM>
-<?
+<?php
 	if ($count>0) {
 		print "Showing events ".($Offset+1)." to ".((($Offset+$Limit)>$count)?$count:$Offset+$Limit)." of ".$count;
 		DisplayTable( $count, $Offset, $Limit, $filter_array );
 ?>
-	<FORM METHOD="post" ACTION="<?$self?>">
+	<FORM METHOD="post" ACTION="<?=$self?>">
 		<INPUT TYPE="hidden" NAME="Limit" VALUE="<?=$process_form["Limit"]?>">
 		<INPUT TYPE="hidden" NAME="Offset" VALUE="<?=($Offset<$Limit)?0:$Offset-$Limit ?>">
 		<INPUT TYPE="hidden" NAME="Filter" VALUE="<?=$Filter ?>">
 		<INPUT TYPE="submit" VALUE="<">
 	</FORM>
 
-	<FORM METHOD="post" ACTION="<?$self?>">
+	<FORM METHOD="post" ACTION="<?=$self?>">
 		<INPUT TYPE="hidden" NAME="Limit" VALUE="<?=$Limit?>">
 		<INPUT TYPE="hidden" NAME="Offset" VALUE="<?=($Offset>=($count-$Limit))?$Offset:($Offset+$Limit)?>">
 		<INPUT TYPE="hidden" NAME="Filter" VALUE="<?=$Filter ?>">
 		<INPUT TYPE="submit" VALUE=">">
 	</FORM>
-<?
+<?php
 		global $ip_lookup;
 		if ($ip_lookup) {
 	?>
@@ -225,7 +225,7 @@ function Events_Run( $plugin_id ) {
 			<iframe id="cframe" src="" frameborder="0" width=100% height=100%></iframe>
 		</div>
 
-<?	
+<?php
 		}
 	} else {
 		print "No events".(($Filter!="")?" for the selected filter":"");
