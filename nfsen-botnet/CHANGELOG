@@ -1,0 +1,31 @@
+Version 0.3:
+
+Bugfixes from Nicolas Macia 
+- get_botnets_emerging-botcc uses ARGV[1] in stead of ARGV[0]
+- the timestamp includes a \n
+- the emerging-botcc.rules should be removed after processing
+
+Version 0.2:
+
+The syntax of the botnet-c&c file changed to include these extra fields:
+- botnet-c&c list source (to be able to differentiate between different sources of botnet-c&c lists)
+- botnet-c&c list timestamp (to be able to backreference to the actual list at which the c&c was reported)
+- botnet-c&c expiration time (as a form of quality control. If a c&c has been reported long ago and it's status is unknown, this field can be used to expire the c&c)
+- botnet identifier (to correlate different c&c to botnets)
+
+Earlier versions required the match_port and match_proto fields to be defined to denote that the plugin should match the port and protocol information. These fields aren't required anymore as the port and protocol information is automatically ommited if it is not found in the list. Those fields may be removed from the configuration as they are not used anymore.
+
+The example get_botnets_emerging-botcc script now doesn't support input from stdin anymore. In stead it requires an extra parameter that references to the location of the emerging-bottcc.rules file (which has to be stored on disk). This is because we can then use the timestamp of the file to identify it. The example botnet.cron script reflects this change.
+
+The mail templates belonging to the botnet plugin have been moved from the events-mail plugin to the botnet plugin.
+
+
+Version 0.1:
+
+The botnet plugin has been posted on the nfsen-discuss mailinglist and I have sent it to some people on request. The differences between these versions and the initial version posted on the nfsen-plugins sourceforge project are slight, but possibly might pose some problems.
+
+The earlier versions refered to the botnet-c&c list provided by www.bleedingthreads.net as an example public botnet-c&c list. This list has not been updated since november 15 2007. However, this list is being continued on www.emergingthreads.net, so to continue using the plugin, you should make sure that you reference to the emergingthreads list in stead of the bleedingthreads one.
+
+In the earlier versions of the plugin, the example "get_botnets_bleeding-botcc" script could export a nfsen-filter by using the "-f" parameter. This functionality has been moved to the "botnet-filter" script in order to simplify the process of creating a custom "get_botnets" script.
+
+The scripts in the "emergingthreads_example" directory reflect all these changes.

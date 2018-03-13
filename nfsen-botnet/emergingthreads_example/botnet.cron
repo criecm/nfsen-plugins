@@ -1,0 +1,7 @@
+#!/bin/sh
+
+cd $1
+wget "http://www.emergingthreats.net/rules/emerging-botcc.rules"  
+get_botnets_emerging-botcc emerging-botcc.rules > $2
+botnet_filter < $2 > $3
+rm emerging-botcc.rules
