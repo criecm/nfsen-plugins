@@ -1,0 +1,21 @@
+CREATE TABLE events (
+	event_id int(10) unsigned NOT NULL auto_increment,
+	starttime int(10) NOT NULL,
+	stoptime int(10) default NULL,
+	updatetime int(10) NOT NULL,
+	level varchar(32) NOT NULL,
+	profile varchar(100) NOT NULL,
+	type varchar(32) NOT NULL,
+	PRIMARY KEY  (event_id),
+	KEY stoptime (stoptime)
+) ENGINE=InnoDB;
+
+CREATE TABLE attributes (
+	attribute_id int(10) unsigned NOT NULL auto_increment,
+	event_id int(10) unsigned default NULL,
+	name varchar(32) default NULL,
+	value varchar(64) default NULL,
+	PRIMARY KEY  (attribute_id),
+	KEY event_name (event_id,name),
+	CONSTRAINT `event_attributes` FOREIGN KEY (event_id) REFERENCES events (event_id) ON DELETE CASCADE
+) ENGINE=InnoDB;

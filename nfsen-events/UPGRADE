@@ -1,0 +1,5 @@
+upgrading from version 0.2 or below to 0.3:
+
+An extra index was added to the events table. You can add this index to your database by loging in to the mysql console and issueing the command:
+
+ALTER TABLE events ADD KEY stoptime (stoptime);

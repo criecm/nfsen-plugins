@@ -1,0 +1,12 @@
+Version 0.3:
+- Replaced _get_where_clause with the function proposed by Rauno Tuul, which drastically increases the overall performance of the Events plugin.
+- Events can now be automatically deleted by using delete_queries in the nfsen configuration
+
+Version 0.2:
+
+Addition to documentation from Jose Manuel Agudo Cuesta:
+- Noted PHP::Serialization as a dependency
+
+Version 0.1:
+
+Initial release of the nfsen-events plugin

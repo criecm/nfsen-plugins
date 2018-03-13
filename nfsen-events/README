@@ -1,0 +1,37 @@
+INSTALLATION:
+
+This plugins needs mysql and the perl modules modules DBI, DBD::mysql and PHP::Serialization to be installed. You can probably install them from your operating system repository, otherwise you can use CPAN to install them.
+
+In mysql you need to create a database and create an account with the proper privileges by issuing the commands on the mysql prompt:
+
+> CREATE DATABASE events;
+> GRANT SELECT, INSERT, DELETE, UPDATE ON events.* TO event_user IDENTIFIED BY 'secret_password';
+> USE events;
+> SOURCE mysql_tables.txt;
+
+You should change the username and password for security reasons. You can do this by replacing 'event_user' and 'secret_password' with a username and password of your choice.  You can choose your own database name by replacing all occurrences of 'events' by your database name.
+
+To install the plugin, you should copy the contents of the backend directory to your nfsen backend-plugin directory (see the $BACKEND_PLUGINDIR variable in nfsen.conf), and the contents of the frontend directory to your nfsen frontend-plugin directory (see the $FRONTEND_PLUGINDIR variable in nfsen.conf).
+
+To configure the plugin, add the following lines to the %PluginConf section of nfsen.conf file:
+events  => {
+	db_connection_string    => "DBI:mysql:database=event;host=quadraplex;port=3306",
+	db_user                 => "nfsen",
+	db_passwd               => "nfsen",
+}
+
+To enable the plugin, add the following line to the @plugins list in your nfsen.conf file:
+[ "live",  'Events' ],
+
+KEEPING THE DATABASE CLEAN:
+
+You can periodically clean up the database by using the 'delete_queries' variable:
+
+%PluginConf = (
+	delete_queries          => [
+		{ # Delete events after 14 days (14 days*24 hour*60 minute*60 seconds=1209600 seconds)    
+			"StopTime"=>['[le]#$unix_time-1209600#'],
+		}
+	...
+	],
+	...
