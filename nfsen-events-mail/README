@@ -1,0 +1,41 @@
+INSTALLATION:
+
+This plugins needs the nfsen-events plugin to be installed. The files in the backend directory should be place in the nfsen backend plugin directory ($BACKEND_PLUGINDIR in nfsen.conf). The mail-templates directory can be placed at a location of your choise (for example: $VARDIR/mail-templates, where the value of $VARDIR is defined in your nfsen.conf).
+
+CONFIGURATION:
+
+To load the plugin, you should add this line to the @plugins section of nfsen.conf:
+	[ "live",  'Events_mail' ],
+
+To configure the plugin, you should add an "events_mail" section to the %PluginConf variable in nfsen.conf. This section should contain a "template_home" variable which points to the mail-templates directory, and a mails variable. The "mails" variable contains a list of mails that should be sent. For every mail you define the folowing variables:
+
+query    : defines the condition for which the mail should be sent.
+to       : the reciepient(s) of the mail
+subject  : The subject off the mail
+template : Which template to use
+action   : can be used to change the event to make sure it isn't reported twice.
+
+This is an example configuration which reports events from the botnet plugin:
+
+events_mail => {
+	template_home           => "$VARDIR/mail-templates",
+	mails => [
+		{       
+			query => { # send a mail for suspected bots
+				"Type"=>"[eq]botnet",
+				"Level"=>"[eq]alarm",
+				"Notified"=>"[null]",
+			},
+			to => ['person1@domain1.com','person2@domain2.com'],
+			subject => '[Nfsen: botnet] source host: $event{Source} destination host: $event{Destination}',
+			template => "botnet_iodef.tp",
+			action => { # Make sure not to report it again before it times out
+				"Type"=>"[eq]botnet",
+				"Level"=>"[eq]alarm",
+				"Notified"=>["[null]",'[set]#$unix_time#'],
+				"UpdateTime"=>'[set]#$unix_time#',
+			},
+		},
+	]
+},
+

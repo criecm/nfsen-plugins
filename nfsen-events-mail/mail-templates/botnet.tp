@@ -1,0 +1,1 @@
+"A suspected bot (".$event{'Source'}.": " .&lookup_address($event{'Source'}).") contacted the known botnet C&C (".$event{'Destination'}.": ".&lookup_address($event{'Destination'}).") $event{'Times'} times between ".scalar(localtime($event{'starttime'}))." and ".scalar(localtime($event{'updatetime'}))."."
